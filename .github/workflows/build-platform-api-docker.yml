@@ -1,0 +1,52 @@
+name: Build & Push Platform API Docker Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "build/docker/platformAPI.Dockerfile"
+      - "openbb_platform/**"
+      - ".github/workflows/build-platform-api-docker.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/openbb-platform-api
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/docker/platformAPI.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
